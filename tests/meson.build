@@ -4,6 +4,7 @@ test_programs = [
     'test-utils.c',
     '../utils.c',
     '../utils.h',
+    link_args: link_args,
     dependencies : [selinux_dep],
     include_directories : common_include_directories,
   )],

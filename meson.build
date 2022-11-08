@@ -70,13 +70,14 @@ else
   python = find_program(get_option('python'))
 endif
 
-libcap_dep = dependency('libcap', required : true)
+libcap_dep = dependency('libcap', required : true, static : get_option('static'))
 
 selinux_dep = dependency(
   'libselinux',
   version : '>=2.1.9',
   # if disabled, Meson will behave as though libselinux was not found
   required : get_option('selinux'),
+  static : get_option('static'),
 )
 
 cdata = configuration_data()
@@ -113,6 +114,11 @@ else
   bwrapdir = get_option('bindir')
 endif
 
+link_args = []
+if get_option('static')
+  link_args += '-static'
+endif
+
 bwrap = executable(
   get_option('program_prefix') + 'bwrap',
   [
@@ -121,6 +127,7 @@ bwrap = executable(
     'network.c',
     'utils.c',
   ],
+  link_args : link_args,
   build_rpath : get_option('build_rpath'),
   install : true,
   install_dir : bwrapdir,
