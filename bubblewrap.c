@@ -99,6 +99,7 @@ int opt_userns2_fd = -1;
 int opt_pidns_fd = -1;
 int next_perms = -1;
 size_t next_size_arg = 0;
+size_t root_size_arg = 0;
 
 #define CAP_TO_MASK_0(x) (1L << ((x) & 31))
 #define CAP_TO_MASK_1(x) CAP_TO_MASK_0(x - 32)
@@ -352,6 +353,7 @@ usage (int ecode, FILE *out)
            "    --cap-drop CAP               Drop cap CAP when running as privileged user\n"
            "    --perms OCTAL                Set permissions of next argument (--bind-data, --file, etc.)\n"
            "    --size BYTES                 Set size of next argument (only for --tmpfs)\n"
+           "    --root-size BYTES            Set size of the root tmpfs mount\n"
            "    --chmod OCTAL PATH           Change permissions of PATH (must already exist)\n"
           );
   exit (ecode);
@@ -2417,8 +2419,9 @@ parse_args_recurse (int          *argcp,
           argv += 1;
           argc -= 1;
         }
-      else if (strcmp (arg, "--size") == 0)
+      else if (strcmp (arg, "--size") == 0 || strcmp (arg, "--root-size") == 0)
         {
+          bool is_root_size;
           unsigned long long size;
           char *endptr = NULL;
 
@@ -2428,7 +2431,8 @@ parse_args_recurse (int          *argcp,
           if (argc < 2)
             die ("--size takes an argument");
 
-          if (next_size_arg != 0)
+          is_root_size = strcmp (arg, "--root-size") == 0;
+          if (!is_root_size && next_size_arg != 0)
             die ("--size given twice for the same action");
 
           errno = 0;  /* reset errno so we can detect ERANGE from strtoull */
@@ -2448,7 +2452,10 @@ parse_args_recurse (int          *argcp,
           if (size > MAX_TMPFS_BYTES)
             die ("--size (for tmpfs) is limited to %zu", MAX_TMPFS_BYTES);
 
-          next_size_arg = (size_t) size;
+          if (is_root_size)
+            root_size_arg = (size_t) size;
+          else
+            next_size_arg = (size_t) size;
 
           argv += 1;
           argc -= 1;
@@ -2620,6 +2627,7 @@ main (int    argc,
   uint64_t val;
   int res UNUSED;
   cleanup_free char *args_data UNUSED = NULL;
+  cleanup_free char *root_mode = NULL;
   int intermediate_pids_sockets[2] = {-1, -1};
 
   /* Handle --version early on before we try to acquire/drop
@@ -3030,7 +3038,9 @@ main (int    argc,
     die_with_error ("Failed to make / slave");
 
   /* Create a tmpfs which we will use as / in the namespace */
-  if (mount ("tmpfs", base_path, "tmpfs", MS_NODEV | MS_NOSUID, NULL) != 0)
+  if (root_size_arg != 0)
+    root_mode = xasprintf("size=%zu", root_size_arg);
+  if (mount ("tmpfs", base_path, "tmpfs", MS_NODEV | MS_NOSUID, root_mode) != 0)
     die_with_error ("Failed to mount tmpfs");
 
   old_cwd = get_current_dir_name ();
