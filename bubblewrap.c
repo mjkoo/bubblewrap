@@ -3038,6 +3038,8 @@ main (int    argc,
     die_with_error ("Failed to make / slave");
 
   /* Create a tmpfs which we will use as / in the namespace */
+  if (root_size_arg > MAX_TMPFS_BYTES)
+    die_with_error ("Specified tmpfs size too large (%zu > %zu)", root_size_arg, MAX_TMPFS_BYTES);
   if (root_size_arg != 0)
     root_mode = xasprintf("size=%zu", root_size_arg);
   if (mount ("tmpfs", base_path, "tmpfs", MS_NODEV | MS_NOSUID, root_mode) != 0)
