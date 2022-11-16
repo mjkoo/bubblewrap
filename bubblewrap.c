@@ -93,6 +93,7 @@ int opt_info_fd = -1;
 int opt_json_status_fd = -1;
 int opt_seccomp_fd = -1;
 const char *opt_sandbox_hostname = NULL;
+const char *opt_root_overlay_lower = NULL;
 char *opt_args_data = NULL;  /* owned */
 int opt_userns_fd = -1;
 int opt_userns2_fd = -1;
@@ -338,6 +339,7 @@ usage (int ecode, FILE *out)
            "    --file FD DEST               Copy from FD to destination DEST\n"
            "    --bind-data FD DEST          Copy from FD to file which is bind-mounted on DEST\n"
            "    --ro-bind-data FD DEST       Copy from FD to file which is readonly bind-mounted on DEST\n"
+           "    --root-overlay-lower SRC     Mount root tmpfs over host directories (colon-delimited) as an overlay\n"
            "    --symlink SRC DEST           Create symlink at DEST with target SRC\n"
            "    --seccomp FD                 Load and use seccomp rules from FD (not repeatable)\n"
            "    --add-seccomp-fd FD          Load and use seccomp rules from FD (repeatable)\n"
@@ -938,6 +940,31 @@ get_newroot_path (const char *path)
   while (*path == '/')
     path++;
   return strconcat ("/newroot/", path);
+}
+
+static char **
+parse_root_overlay_lower(char *root_overlay_lower_arg)
+{
+  char **ret = NULL;
+  size_t num_components = 1;
+  char *c = NULL;
+  int i = 0;
+
+  for (c = root_overlay_lower_arg; *c; c++)
+    if (*c == ':')
+      num_components += 1;
+
+  assert (num_components > 0);
+  assert (num_components + 1 > num_components);
+  ret = calloc(num_components + 1, sizeof(*ret));
+  if (!ret)
+    die_oom();
+
+  ret[i++] = strtok(root_overlay_lower_arg, ":");
+  while (i < num_components)
+    ret[i++] = strtok(NULL, ":");
+
+  return ret;
 }
 
 static void
@@ -2022,6 +2049,16 @@ parse_args_recurse (int          *argcp,
           argv += 2;
           argc -= 2;
         }
+      else if (strcmp (arg, "--root-overlay-lower") == 0)
+        {
+          if (argc < 2)
+            die ("--host-root-overlay takes an argument");
+
+          opt_root_overlay_lower = argv[1];
+
+          argv += 1;
+          argc -= 1;
+        }
       else if (strcmp (arg, "--symlink") == 0)
         {
           if (argc < 3)
@@ -3050,7 +3087,37 @@ main (int    argc,
     die_with_error ("Creating newroot failed");
 
   if (mount ("newroot", "newroot", NULL, MS_SILENT | MS_MGC_VAL | MS_BIND | MS_REC, NULL) < 0)
-    die_with_error ("setting up newroot bind");
+    die_with_error ("Setting up newroot bind failed");
+
+  if (opt_root_overlay_lower)
+    {
+      if (mkdir ("upper", 0755))
+        die_with_error ("Creating upperdir failed");
+
+      if (mkdir ("work", 0755))
+        die_with_error ("Creating workdir failed");
+
+      if (mkdir ("rootview", 0755))
+        die_with_error ("Creating rootview failed");
+      
+      char *failing_path;
+      bind_mount_result br = bind_mount(proc_fd, "/", "rootview", BIND_READONLY | BIND_RECURSIVE, &failing_path);
+      printf("res: %d, failing_path: %s\n", br, failing_path);
+
+      if (mount ("overlay", "newroot", "overlay", 0, "lowerdir=rootview,upperdir=upper,workdir=work") < 0)
+        die_with_error ("Setting up overlayfs failed");
+      
+      // DEBUG
+      DIR *d;
+      struct dirent *dir;
+      d = opendir("rootview");
+      if (d) {
+        while ((dir = readdir(d)) != NULL) {
+          printf("%s\n", dir->d_name);
+        }
+        closedir(d);
+      }
+    }
 
   if (mkdir ("oldroot", 0755))
     die_with_error ("Creating oldroot failed");
