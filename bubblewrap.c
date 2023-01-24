@@ -98,6 +98,7 @@ int opt_userns_fd = -1;
 int opt_userns2_fd = -1;
 int opt_pidns_fd = -1;
 int next_perms = -1;
+const char *opt_root_overlay_lowerdir = NULL;
 size_t next_size_arg = 0;
 size_t root_size_arg = 0;
 
@@ -297,64 +298,65 @@ usage (int ecode, FILE *out)
   fprintf (out, "usage: %s [OPTIONS...] [--] COMMAND [ARGS...]\n\n", argv0 ? argv0 : "bwrap");
 
   fprintf (out,
-           "    --help                       Print this help\n"
-           "    --version                    Print version\n"
-           "    --args FD                    Parse NUL-separated args from FD\n"
-           "    --unshare-all                Unshare every namespace we support by default\n"
-           "    --share-net                  Retain the network namespace (can only combine with --unshare-all)\n"
-           "    --unshare-user               Create new user namespace (may be automatically implied if not setuid)\n"
-           "    --unshare-user-try           Create new user namespace if possible else continue by skipping it\n"
-           "    --unshare-ipc                Create new ipc namespace\n"
-           "    --unshare-pid                Create new pid namespace\n"
-           "    --unshare-net                Create new network namespace\n"
-           "    --unshare-uts                Create new uts namespace\n"
-           "    --unshare-cgroup             Create new cgroup namespace\n"
-           "    --unshare-cgroup-try         Create new cgroup namespace if possible else continue by skipping it\n"
-           "    --userns FD                  Use this user namespace (cannot combine with --unshare-user)\n"
-           "    --userns2 FD                 After setup switch to this user namespace, only useful with --userns\n"
-           "    --pidns FD                   Use this pid namespace (as parent namespace if using --unshare-pid)\n"
-           "    --uid UID                    Custom uid in the sandbox (requires --unshare-user or --userns)\n"
-           "    --gid GID                    Custom gid in the sandbox (requires --unshare-user or --userns)\n"
-           "    --hostname NAME              Custom hostname in the sandbox (requires --unshare-uts)\n"
-           "    --chdir DIR                  Change directory to DIR\n"
-           "    --clearenv                   Unset all environment variables\n"
-           "    --setenv VAR VALUE           Set an environment variable\n"
-           "    --unsetenv VAR               Unset an environment variable\n"
-           "    --lock-file DEST             Take a lock on DEST while sandbox is running\n"
-           "    --sync-fd FD                 Keep this fd open while sandbox is running\n"
-           "    --bind SRC DEST              Bind mount the host path SRC on DEST\n"
-           "    --bind-try SRC DEST          Equal to --bind but ignores non-existent SRC\n"
-           "    --dev-bind SRC DEST          Bind mount the host path SRC on DEST, allowing device access\n"
-           "    --dev-bind-try SRC DEST      Equal to --dev-bind but ignores non-existent SRC\n"
-           "    --ro-bind SRC DEST           Bind mount the host path SRC readonly on DEST\n"
-           "    --ro-bind-try SRC DEST       Equal to --ro-bind but ignores non-existent SRC\n"
-           "    --remount-ro DEST            Remount DEST as readonly; does not recursively remount\n"
-           "    --exec-label LABEL           Exec label for the sandbox\n"
-           "    --file-label LABEL           File label for temporary sandbox content\n"
-           "    --proc DEST                  Mount new procfs on DEST\n"
-           "    --dev DEST                   Mount new dev on DEST\n"
-           "    --tmpfs DEST                 Mount new tmpfs on DEST\n"
-           "    --mqueue DEST                Mount new mqueue on DEST\n"
-           "    --dir DEST                   Create dir at DEST\n"
-           "    --file FD DEST               Copy from FD to destination DEST\n"
-           "    --bind-data FD DEST          Copy from FD to file which is bind-mounted on DEST\n"
-           "    --ro-bind-data FD DEST       Copy from FD to file which is readonly bind-mounted on DEST\n"
-           "    --symlink SRC DEST           Create symlink at DEST with target SRC\n"
-           "    --seccomp FD                 Load and use seccomp rules from FD (not repeatable)\n"
-           "    --add-seccomp-fd FD          Load and use seccomp rules from FD (repeatable)\n"
-           "    --block-fd FD                Block on FD until some data to read is available\n"
-           "    --userns-block-fd FD         Block on FD until the user namespace is ready\n"
-           "    --info-fd FD                 Write information about the running container to FD\n"
-           "    --json-status-fd FD          Write container status to FD as multiple JSON documents\n"
-           "    --new-session                Create a new terminal session\n"
-           "    --die-with-parent            Kills with SIGKILL child process (COMMAND) when bwrap or bwrap's parent dies.\n"
-           "    --as-pid-1                   Do not install a reaper process with PID=1\n"
-           "    --cap-add CAP                Add cap CAP when running as privileged user\n"
-           "    --cap-drop CAP               Drop cap CAP when running as privileged user\n"
-           "    --perms OCTAL                Set permissions of next argument (--bind-data, --file, etc.)\n"
-           "    --size BYTES                 Set size of next argument (only for --tmpfs)\n"
-           "    --root-size BYTES            Set size of the root tmpfs mount\n"
-           "    --chmod OCTAL PATH           Change permissions of PATH (must already exist)\n"
+           "    --help                        Print this help\n"
+           "    --version                     Print version\n"
+           "    --args FD                     Parse NUL-separated args from FD\n"
+           "    --unshare-all                 Unshare every namespace we support by default\n"
+           "    --share-net                   Retain the network namespace (can only combine with --unshare-all)\n"
+           "    --unshare-user                Create new user namespace (may be automatically implied if not setuid)\n"
+           "    --unshare-user-try            Create new user namespace if possible else continue by skipping it\n"
+           "    --unshare-ipc                 Create new ipc namespace\n"
+           "    --unshare-pid                 Create new pid namespace\n"
+           "    --unshare-net                 Create new network namespace\n"
+           "    --unshare-uts                 Create new uts namespace\n"
+           "    --unshare-cgroup              Create new cgroup namespace\n"
+           "    --unshare-cgroup-try          Create new cgroup namespace if possible else continue by skipping it\n"
+           "    --userns FD                   Use this user namespace (cannot combine with --unshare-user)\n"
+           "    --userns2 FD                  After setup switch to this user namespace, only useful with --userns\n"
+           "    --pidns FD                    Use this pid namespace (as parent namespace if using --unshare-pid)\n"
+           "    --uid UID                     Custom uid in the sandbox (requires --unshare-user or --userns)\n"
+           "    --gid GID                     Custom gid in the sandbox (requires --unshare-user or --userns)\n"
+           "    --hostname NAME               Custom hostname in the sandbox (requires --unshare-uts)\n"
+           "    --chdir DIR                   Change directory to DIR\n"
+           "    --clearenv                    Unset all environment variables\n"
+           "    --setenv VAR VALUE            Set an environment variable\n"
+           "    --unsetenv VAR                Unset an environment variable\n"
+           "    --lock-file DEST              Take a lock on DEST while sandbox is running\n"
+           "    --root-overlay-lowerdir DIRS  Mount an overlayfs with the specified lowerdir as root\n"
+           "    --bind SRC DEST               Bind mount the host path SRC on DEST\n"
+           "    --bind-try SRC DEST           Equal to --bind but ignores non-existent SRC\n"
+           "    --dev-bind SRC DEST           Bind mount the host path SRC on DEST, allowing device access\n"
+           "    --dev-bind-try SRC DEST       Equal to --dev-bind but ignores non-existent SRC\n"
+           "    --ro-bind SRC DEST            Bind mount the host path SRC readonly on DEST\n"
+           "    --ro-bind-try SRC DEST        Equal to --ro-bind but ignores non-existent SRC\n"
+           "    --remount-ro DEST             Remount DEST as readonly; does not recursively remount\n"
+           "    --exec-label LABEL            Exec label for the sandbox\n"
+           "    --file-label LABEL            File label for temporary sandbox content\n"
+           "    --proc DEST                   Mount new procfs on DEST\n"
+           "    --dev DEST                    Mount new dev on DEST\n"
+           "    --tmpfs DEST                  Mount new tmpfs on DEST\n"
+           "    --mqueue DEST                 Mount new mqueue on DEST\n"
+           "    --dir DEST                    Create dir at DEST\n"
+           "    --file FD DEST                Copy from FD to destination DEST\n"
+           "    --bind-data FD DEST           Copy from FD to file which is bind-mounted on DEST\n"
+           "    --ro-bind-data FD DEST        Copy from FD to file which is readonly bind-mounted on DEST\n"
+           "    --symlink SRC DEST            Create symlink at DEST with target SRC\n"
+           "    --seccomp FD                  Load and use seccomp rules from FD (not repeatable)\n"
+           "    --add-seccomp-fd FD           Load and use seccomp rules from FD (repeatable)\n"
+           "    --sync-fd FD                  Keep this fd open while sandbox is running\n"
+           "    --block-fd FD                 Block on FD until some data to read is available\n"
+           "    --userns-block-fd FD          Block on FD until the user namespace is ready\n"
+           "    --info-fd FD                  Write information about the running container to FD\n"
+           "    --json-status-fd FD           Write container status to FD as multiple JSON documents\n"
+           "    --new-session                 Create a new terminal session\n"
+           "    --die-with-parent             Kills with SIGKILL child process (COMMAND) when bwrap or bwrap's parent dies.\n"
+           "    --as-pid-1                    Do not install a reaper process with PID=1\n"
+           "    --cap-add CAP                 Add cap CAP when running as privileged user\n"
+           "    --cap-drop CAP                Drop cap CAP when running as privileged user\n"
+           "    --perms OCTAL                 Set permissions of next argument (--bind-data, --file, etc.)\n"
+           "    --chmod OCTAL PATH            Change permissions of PATH (must already exist)\n"
+           "    --size BYTES                  Set size of next argument (only for --tmpfs)\n"
+           "    --root-size BYTES             Set size of the root tmpfs mount\n"
           );
   exit (ecode);
 }
@@ -1114,7 +1116,7 @@ privileged_op (int         privileged_op_socket,
 
     case PRIV_SEP_OP_TMPFS_MOUNT:
       {
-        cleanup_free char *mode = NULL;
+        cleanup_free char *extra_opt = NULL;
 
         /* This check should be unnecessary since we checked this when parsing
          * the --size option as well. However, better be safe than sorry. */
@@ -1122,11 +1124,11 @@ privileged_op (int         privileged_op_socket,
           die_with_error ("Specified tmpfs size too large (%zu > %zu)", size_arg, MAX_TMPFS_BYTES);
 
         if (size_arg != 0)
-          mode = xasprintf ("mode=%#o,size=%zu", perms, size_arg);
+          extra_opt = xasprintf ("mode=%#o,size=%zu", perms, size_arg);
         else
-          mode = xasprintf ("mode=%#o", perms);
+          extra_opt = xasprintf ("mode=%#o", perms);
 
-        cleanup_free char *opt = label_mount (mode, opt_file_label);
+        cleanup_free char *opt = label_mount (extra_opt, opt_file_label);
         if (mount ("tmpfs", arg1, "tmpfs", MS_NOSUID | MS_NODEV, opt) != 0)
           die_with_error ("Can't mount tmpfs on %s", arg1);
         break;
@@ -1155,6 +1157,43 @@ privileged_op (int         privileged_op_socket,
     default:
       die ("Unexpected privileged op %d", op);
     }
+}
+
+/* Rewrite lowerdir to be relative to /oldroot */
+static char *
+get_resolved_root_overlay_lowerdir (const char *lowerdir)
+{
+  cleanup_free char *orig_lowerdir = xstrdup (lowerdir);
+  const char *delim = ":";
+  char *ret = NULL;
+
+  char *token = strtok (orig_lowerdir, delim);
+  while (token) {
+    cleanup_free char *path = realpath (token, NULL);
+    cleanup_free char *oldroot_path = get_oldroot_path(path);
+    ret = ret ? strconcat3(ret, ":", oldroot_path) : strdup (oldroot_path);
+
+    token = strtok(NULL, delim);
+  }
+
+  return ret;
+}
+
+/* This is run before setting up the rest of newroot */
+static void
+setup_newroot_overlay (const char *lowerdir)
+{
+  cleanup_free char *opt = xasprintf ("lowerdir=%s,upperdir=/upper,workdir=/work",
+                                      lowerdir);
+
+  if (mkdir ("/upper", 0755))
+    die_with_error ("creating upperdir failed");
+
+  if (mkdir ("/work", 0755))
+    die_with_error ("creating workdir failed");
+
+  if (mount ("overlay", "/newroot", "overlay", 0, opt))
+    die_with_error ("mounting root overlayfs failed");
 }
 
 /* This is run unprivileged in the child namespace but can request
@@ -2046,6 +2085,19 @@ parse_args_recurse (int          *argcp,
           argv += 1;
           argc -= 1;
         }
+      else if (strcmp (arg, "--root-overlay-lowerdir") == 0)
+        {
+          if (argc < 2)
+            die ("--root-overlay-lowerdir takes an argument");
+
+          if (opt_root_overlay_lowerdir != NULL)
+            warn_only_last_option ("--root-overlay-lowerdir");
+
+          opt_root_overlay_lowerdir = argv[1];
+
+          argv += 1;
+          argc -= 1;
+        }
       else if (strcmp (arg, "--sync-fd") == 0)
         {
           int the_fd;
@@ -2628,6 +2680,7 @@ main (int    argc,
   int res UNUSED;
   cleanup_free char *args_data UNUSED = NULL;
   cleanup_free char *root_mode = NULL;
+  cleanup_free char *root_overlay_lowerdir = NULL;
   int intermediate_pids_sockets[2] = {-1, -1};
 
   /* Handle --version early on before we try to acquire/drop
@@ -3031,6 +3084,9 @@ main (int    argc,
   /* Need to do this before the chroot, but after we're the real uid */
   resolve_symlinks_in_ops ();
 
+  if (opt_root_overlay_lowerdir)
+    root_overlay_lowerdir = get_resolved_root_overlay_lowerdir(opt_root_overlay_lowerdir);
+
   /* Mark everything as slave, so that we still
    * receive mounts from the real root, but don't
    * propagate mounts to the real root. */
@@ -3072,6 +3128,9 @@ main (int    argc,
 
   if (chdir ("/") != 0)
     die_with_error ("chdir / (base path)");
+
+  if (root_overlay_lowerdir)
+    setup_newroot_overlay (root_overlay_lowerdir);
 
   if (is_privileged)
     {
